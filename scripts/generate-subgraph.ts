@@ -73,44 +73,6 @@ const contractTemplates = {
       ],
     },
   },
-  EulerSwapFactory: {
-    kind: 'ethereum/contract',
-    mapping: {
-      kind: 'ethereum/events',
-      apiVersion: '0.0.7',
-      language: 'wasm/assemblyscript',
-      file: './src/mappings/euler.mapping.ts',
-      entities: ['Position'],
-      abis: [{ name: 'EulerSwapFactory', file: './abis/EulerSwapFactory.json' }],
-      eventHandlers: [
-        {
-          event: 'PoolDeployed(indexed address,indexed address,indexed address,address)',
-          handler: 'handleHookDeployed',
-        },
-        {
-          event: 'PoolUninstalled(indexed address,indexed address,indexed address,address)',
-          handler: 'handleHookUninstalled',
-        },
-      ],
-    },
-  },
-  ArrakisHookFactory: {
-    kind: 'ethereum/contract',
-    mapping: {
-      kind: 'ethereum/events',
-      apiVersion: '0.0.7',
-      language: 'wasm/assemblyscript',
-      file: './src/mappings/arrakis.mapping.ts',
-      entities: ['ArrakisHook'],
-      abis: [{ name: 'ArrakisHookFactory', file: './abis/ArrakisHookFactory.json' }],
-      eventHandlers: [
-        {
-          event: 'LogCreatePrivateHook(indexed address,indexed address,bytes32)',
-          handler: 'handleArrakisHookDeployed',
-        },
-      ],
-    },
-  },
 }
 
 // Base subgraph configuration
