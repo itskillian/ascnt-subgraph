@@ -2,7 +2,7 @@ import { Address, BigDecimal, BigInt, log } from '@graphprotocol/graph-ts'
 
 import { AggregatorHook } from '../types/PoolManager/AggregatorHook'
 import { Swap as SwapEvent } from '../types/PoolManager/PoolManager'
-import { Bundle, Pool, PoolManager, Swap, Token } from '../types/schema'
+import { Bundle, Pool, PoolManager, Swap, SwapStaging, Token } from '../types/schema'
 import { getSubgraphConfig, getUSDStableStableHookAddresses, SubgraphConfig } from '../utils/chains'
 import { ONE_BI, ZERO_BD } from '../utils/constants'
 import { convertTokenToDecimal, loadTransaction, safeDiv } from '../utils/index'
@@ -185,7 +185,8 @@ export function handleSwapHelper(event: SwapEvent, subgraphConfig: SubgraphConfi
 
     // create Swap event
     const transaction = loadTransaction(event)
-    const swap = new Swap(transaction.id + '-' + event.logIndex.toString())
+    const swapId = transaction.id + '-' + event.logIndex.toString()
+    const swap = new Swap(swapId)
     swap.transaction = transaction.id
     swap.timestamp = transaction.timestamp
     swap.pool = pool.id
@@ -199,6 +200,19 @@ export function handleSwapHelper(event: SwapEvent, subgraphConfig: SubgraphConfi
     swap.tick = BigInt.fromI32(event.params.tick as i32)
     swap.sqrtPriceX96 = event.params.sqrtPriceX96
     swap.logIndex = event.logIndex
+
+    const swapStagingId = transaction.id + '-' + poolId
+    const swapStaging = SwapStaging.load(swapStagingId)
+    if (swapStaging) {
+      swap.sqrtPriceX96Before = swapStaging.sqrtPriceX96Before
+      swap.illiqBefore = swapStaging.illiqBefore
+      swap.estimatedVolume1 = swapStaging.estimatedVolume1
+      swap.estimatedPriceImpact = swapStaging.estimatedPriceImpact
+      swap.decayedCumPriceImpact = swapStaging.decayedCumPriceImpact
+      swap.dynamicFeePips = swapStaging.dynamicFeePips
+      swapStaging.swapId = swap.id
+      swapStaging.save()
+    }
 
     // interval data
     const uniswapDayData = updateUniswapDayData(event, poolManagerAddress)

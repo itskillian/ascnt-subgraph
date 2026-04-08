@@ -1,6 +1,6 @@
 specVersion: 0.0.4
-description: Uniswap is a decentralized protocol for automated token exchange on Ethereum.
-repository: https://github.com/Uniswap/v4-subgraph
+description: Ascnt is a decentralized protocol for custom fee pools on Uniswap V4.
+repository:
 schema:
   file: ./schema.graphql
 features:
@@ -80,6 +80,7 @@ dataSources:
       language: wasm/assemblyscript
       file: ./src/mappings/ascnt.mapping.ts
       entities:
+        - PoolManager
         - Swap
         - Pool
       abis:

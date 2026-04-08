@@ -58,6 +58,9 @@ export function handleInitializeHelper(
     poolManager.txCount = ZERO_BI
     poolManager.owner = ADDRESS_ZERO
 
+    poolManager.ascntPools = []
+    poolManager.ascntPoolCount = ZERO_BI
+
     // create new bundle for tracking eth price
     const bundle = new Bundle('1')
     bundle.ethPriceUSD = ZERO_BD
