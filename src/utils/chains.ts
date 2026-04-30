@@ -441,6 +441,7 @@ export function getSubgraphConfig(): SubgraphConfig {
         '0xdac17f958d2ee523a2206206994597c13d831ec7', // USDT
         '0x0000000000085d4780b73119b644ae5ecd22b376', // TUSD
         '0x956f47f50a910163d8bf957cf5846d573e7f87ca', // FEI
+        '0x1abaea1f7c830bd89acc67ec4af516284b1bc33c', // EURC
       ],
       whitelistTokens: [
         '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', // WETH
