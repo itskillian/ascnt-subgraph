@@ -35,6 +35,11 @@ class InitializeFixture {
   tick: string
 }
 
+const ASCNT_HOOK_ADDRESS = '0x29d6e0ff868ba37fd81f84208b1bc6781dffb0c0'
+
+/** Uniswap v4 `uint24` fee value reserved for dynamic-fee pools. */
+const DYNAMIC_FEE_TIER = '8388608'
+
 const INITIALIZE_FIXTURE: InitializeFixture = {
   id: USDC_WETH_POOL_ID,
   currency0: USDC_MAINNET_FIXTURE.address,
@@ -48,28 +53,38 @@ const INITIALIZE_FIXTURE: InitializeFixture = {
 
 const id = Bytes.fromHexString(USDC_WETH_POOL_ID) as Bytes
 
-const INITIALIZE_EVENT = new Initialize(
-  MOCK_EVENT.address,
-  MOCK_EVENT.logIndex,
-  MOCK_EVENT.transactionLogIndex,
-  MOCK_EVENT.logType,
-  MOCK_EVENT.block,
-  MOCK_EVENT.transaction,
-  [
-    new ethereum.EventParam('id', ethereum.Value.fromFixedBytes(id)),
-    new ethereum.EventParam('currency0', ethereum.Value.fromAddress(Address.fromString(INITIALIZE_FIXTURE.currency0))),
-    new ethereum.EventParam('currency1', ethereum.Value.fromAddress(Address.fromString(INITIALIZE_FIXTURE.currency1))),
-    new ethereum.EventParam('fee', ethereum.Value.fromI32(parseInt(INITIALIZE_FIXTURE.fee) as i32)),
-    new ethereum.EventParam('tickSpacing', ethereum.Value.fromI32(parseInt(INITIALIZE_FIXTURE.tickSpacing) as i32)),
-    new ethereum.EventParam('hooks', ethereum.Value.fromAddress(Address.fromString(INITIALIZE_FIXTURE.hooks))),
-    new ethereum.EventParam(
-      'sqrtPriceX96',
-      ethereum.Value.fromUnsignedBigInt(BigInt.fromString(INITIALIZE_FIXTURE.sqrtPriceX96)),
-    ),
-    new ethereum.EventParam('tick', ethereum.Value.fromI32(parseInt(INITIALIZE_FIXTURE.tick) as i32)),
-  ],
-  MOCK_EVENT.receipt,
-)
+function createInitializeEvent(hooks: string, fee: string = INITIALIZE_FIXTURE.fee): Initialize {
+  return new Initialize(
+    MOCK_EVENT.address,
+    MOCK_EVENT.logIndex,
+    MOCK_EVENT.transactionLogIndex,
+    MOCK_EVENT.logType,
+    MOCK_EVENT.block,
+    MOCK_EVENT.transaction,
+    [
+      new ethereum.EventParam('id', ethereum.Value.fromFixedBytes(id)),
+      new ethereum.EventParam(
+        'currency0',
+        ethereum.Value.fromAddress(Address.fromString(INITIALIZE_FIXTURE.currency0)),
+      ),
+      new ethereum.EventParam(
+        'currency1',
+        ethereum.Value.fromAddress(Address.fromString(INITIALIZE_FIXTURE.currency1)),
+      ),
+      new ethereum.EventParam('fee', ethereum.Value.fromI32(parseInt(fee) as i32)),
+      new ethereum.EventParam('tickSpacing', ethereum.Value.fromI32(parseInt(INITIALIZE_FIXTURE.tickSpacing) as i32)),
+      new ethereum.EventParam('hooks', ethereum.Value.fromAddress(Address.fromString(hooks))),
+      new ethereum.EventParam(
+        'sqrtPriceX96',
+        ethereum.Value.fromUnsignedBigInt(BigInt.fromString(INITIALIZE_FIXTURE.sqrtPriceX96)),
+      ),
+      new ethereum.EventParam('tick', ethereum.Value.fromI32(parseInt(INITIALIZE_FIXTURE.tick) as i32)),
+    ],
+    MOCK_EVENT.receipt,
+  )
+}
+
+const INITIALIZE_EVENT = createInitializeEvent(INITIALIZE_FIXTURE.hooks)
 
 describe('handleInitialize', () => {
   test('success', () => {
@@ -102,6 +117,8 @@ describe('handleInitialize', () => {
       ['createdAtBlockNumber', MOCK_EVENT.block.number.toString()],
       ['token0Price', expectedPrices[0].toString()],
       ['token1Price', expectedPrices[1].toString()],
+      ['isAscntPool', 'false'],
+      ['isDynamicFee', 'false'],
     ])
 
     const expectedEthPrice = getNativePriceInUSD(USDC_WETH_POOL_ID, true)
@@ -122,6 +139,67 @@ describe('handleInitialize', () => {
       TEST_CONFIG.minimumNativeLocked,
     )
     assertObjectMatches('Token', WETH_MAINNET_FIXTURE.address, [['derivedETH', expectedToken1Price.toString()]])
+  })
+
+  test('leaves isAscntPool=false even when hook matches Ascnt — flag is set by handleAscntInitialized', () => {
+    clearStore()
+
+    createAndStoreTestPool(USDC_WETH_05_MAINNET_POOL_FIXTURE)
+    createAndStoreTestToken(USDC_MAINNET_FIXTURE)
+    createAndStoreTestToken(WETH_MAINNET_FIXTURE)
+
+    const bundle = new Bundle('1')
+    bundle.ethPriceUSD = TEST_ETH_PRICE_USD
+    bundle.save()
+
+    const ascntHookInitializeEvent = createInitializeEvent(ASCNT_HOOK_ADDRESS)
+    handleInitializeHelper(ascntHookInitializeEvent, TEST_CONFIG)
+
+    // handleInitialize doesn't gate on hook address — the AscntDivHook.PoolInitialized
+    // handler is what flips isAscntPool to true. See handleAscntInitialized.test.ts.
+    assertObjectMatches('Pool', USDC_WETH_POOL_ID, [
+      ['isAscntPool', 'false'],
+      ['isDynamicFee', 'false'],
+    ])
+  })
+
+  test('sets isDynamicFee true when fee tier is dynamic-fee sentinel (ascnt hook)', () => {
+    clearStore()
+
+    createAndStoreTestPool(USDC_WETH_05_MAINNET_POOL_FIXTURE)
+    createAndStoreTestToken(USDC_MAINNET_FIXTURE)
+    createAndStoreTestToken(WETH_MAINNET_FIXTURE)
+
+    const bundle = new Bundle('1')
+    bundle.ethPriceUSD = TEST_ETH_PRICE_USD
+    bundle.save()
+
+    const event = createInitializeEvent(ASCNT_HOOK_ADDRESS, DYNAMIC_FEE_TIER)
+    handleInitializeHelper(event, TEST_CONFIG)
+
+    // isAscntPool is asserted in handleAscntInitialized.test.ts; this test only covers
+    // the fee-tier → isDynamicFee derivation, which lives in handleInitialize.
+    assertObjectMatches('Pool', USDC_WETH_POOL_ID, [
+      ['feeTier', DYNAMIC_FEE_TIER],
+      ['isDynamicFee', 'true'],
+    ])
+  })
+
+  test('sets isDynamicFee false for other fee tiers', () => {
+    clearStore()
+
+    createAndStoreTestPool(USDC_WETH_05_MAINNET_POOL_FIXTURE)
+    createAndStoreTestToken(USDC_MAINNET_FIXTURE)
+    createAndStoreTestToken(WETH_MAINNET_FIXTURE)
+
+    const bundle = new Bundle('1')
+    bundle.ethPriceUSD = TEST_ETH_PRICE_USD
+    bundle.save()
+
+    const fee3000Event = createInitializeEvent(ADDRESS_ZERO, '3000')
+    handleInitializeHelper(fee3000Event, TEST_CONFIG)
+
+    assertObjectMatches('Pool', USDC_WETH_POOL_ID, [['isDynamicFee', 'false']])
   })
 })
 
