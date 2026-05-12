@@ -1,13 +1,13 @@
 import { BigInt, log } from '@graphprotocol/graph-ts'
 
-import { PoolConfigured as PoolConfiguredEvent } from '../types/AscntDivHook/AscntDivHook'
+import { PoolConfigured as AscntConfiguredEvent } from '../types/AscntDivHook/AscntDivHook'
 import { Pool } from '../types/schema'
 
-export function handlePoolConfigured(event: PoolConfiguredEvent): void {
-  handlePoolConfiguredHelper(event)
+export function handleAscntConfigured(event: AscntConfiguredEvent): void {
+  handleAscntConfiguredHelper(event)
 }
 
-export function handlePoolConfiguredHelper(event: PoolConfiguredEvent): void {
+export function handleAscntConfiguredHelper(event: AscntConfiguredEvent): void {
   const poolId = event.params.poolId.toHexString()
   const pool = Pool.load(poolId)
 

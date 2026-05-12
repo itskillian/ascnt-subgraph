@@ -465,6 +465,8 @@ export function getSubgraphConfig(): SubgraphConfig {
         '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9', // AAVE
         '0xfe2e637202056d30016725477c5da089ab0a043a', // sETH2
         '0x0000000000000000000000000000000000000000', // Native ETH
+        '0x1abaea1f7c830bd89acc67ec4af516284b1bc33c', // EURC
+        '0xdef1ca1fb7fbcdc777520aa7f396b4e015f497ab', // COW
       ],
       tokenOverrides: [
         {
@@ -775,6 +777,15 @@ export function getUSDStableStableHookAddresses(): string[] {
     return ['0x717c31c3Ea5F9070297f239FaFD63d21Afdaa888']
   }
   return []
+}
+
+// PositionManager address per network. Used to detect modifyLiquidity events
+// routed through the canonical PositionManager so we can link them to Position entities.
+export function getPositionManagerAddress(): string {
+  if (dataSource.network() == MAINNET_NETWORK_NAME) {
+    return '0xbd216513d74c8cf14cf4747e6aaa6420ff64ee9e'
+  }
+  return ''
 }
 
 // Returns a hardcoded native token USD price for chains where native token is itself a USD stable asset.

@@ -1,6 +1,6 @@
 specVersion: 0.0.4
 description: Ascnt is a decentralized protocol for custom fee pools on Uniswap V4.
-repository:
+repository: https://github.com/itskillian/ascnt-subgraph
 schema:
   file: ./schema.graphql
 features:
@@ -88,11 +88,10 @@ dataSources:
           file: ./abis/AscntDivHook.json
       eventHandlers:
         - event: AfterSwap(indexed bytes32,uint160,uint256,uint256,int256,uint256,uint256)
-          handler: handleAfterSwap
+          handler: handleAscntAfterSwap
         - event: BeforeSwap(indexed bytes32,uint160,uint256,uint256,uint256,int256,uint24,uint256)
-          handler: handleBeforeSwap
+          handler: handleAscntBeforeSwap
         - event: PoolConfigured(indexed bytes32,bool,uint24,uint24,uint24,uint256,uint256,uint256)
-          handler: handlePoolConfigured
-        - event: PoolInitialized(indexed bytes32,indexed address,indexed
-            address,uint24,int24,address,uint160,int24)
-          handler: handlePoolInitialized
+          handler: handleAscntConfigured
+        - event: PoolInitialized(indexed bytes32,indexed address,indexed address,uint24,int24,address,uint160,int24)
+          handler: handleAscntInitialized

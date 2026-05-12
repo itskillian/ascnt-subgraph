@@ -26,16 +26,6 @@ type PoolManager @entity(immutable: false) {
   # Ascnt hooks whitelisted pools only
   ascntPools: [Pool!]!
   ascntPoolCount: BigInt!
-
-  # ascntTotalVolumeUSD: BigDecimal!
-  # ascntTotalVolumeETH: BigDecimal!
-
-  # ascntTotalFeesUSD: BigDecimal!
-  # ascntTotalFeesETH: BigDecimal!
-
-  # ascntTotalValueLockedUSD: BigDecimal!
-  # ascntTotalValueLockedETH: BigDecimal!
-
   # current owner of the factory
   owner: ID!
 }
@@ -99,6 +89,8 @@ type Pool @entity(immutable: false) {
   token1: Token!
   # fee amount
   feeTier: BigInt!
+  # dynamic fee pool
+  isDynamicFee: Boolean!
   # in range liquidity
   liquidity: BigInt!
   # current price tracker
@@ -149,8 +141,6 @@ type Pool @entity(immutable: false) {
   poolHourData: [PoolHourData!]! @derivedFrom(field: "pool")
   # daily snapshots of pool data
   poolDayData: [PoolDayData!]! @derivedFrom(field: "pool")
-  # # weekly snapshots of pool data
-  # poolWeekData: [PoolWeekData!]! @derivedFrom(field: "pool")
   # hooks address
   hooks: String!
   # derived fields
@@ -158,6 +148,8 @@ type Pool @entity(immutable: false) {
   swaps: [Swap!]! @derivedFrom(field: "pool")
   ticks: [Tick!]! @derivedFrom(field: "pool")
   # --- Ascnt-specific fields ---
+  # Ascnt pool flag
+  isAscntPool: Boolean!
   # is pool configured
   configured: Boolean
   # min fee
@@ -322,28 +314,8 @@ type ModifyLiquidity @entity(immutable: true) {
   tickUpper: BigInt!
   # index within the txn
   logIndex: BigInt
-  # # pointer to position
-  # position: Position!
-}
-
-# Data accumulated and condensed into day stats for all of Uniswap
-type UniswapDayData @entity(immutable: false) {
-  # timestamp rounded to current day by dividing by 86400
-  id: ID!
-  # timestamp rounded to current day by dividing by 86400
-  date: Int!
-  # total daily volume in Uniswap derived in terms of ETH
-  volumeETH: BigDecimal!
-  # total daily volume in Uniswap derived in terms of USD
-  volumeUSD: BigDecimal!
-  # total daily volume in Uniswap derived in terms of USD untracked
-  volumeUSDUntracked: BigDecimal!
-  # fees in USD
-  feesUSD: BigDecimal!
-  # number of daily transactions
-  txCount: BigInt!
-  # tvl in terms of USD
-  tvlUSD: BigDecimal!
+  # pointer to position (only set when routed through PositionManager)
+  position: Position
 }
 
 # Data accumulated and condensed into day stats for each pool
@@ -376,6 +348,8 @@ type PoolDayData @entity(immutable: false) {
   feesUSD: BigDecimal!
   # number of transactions during period
   txCount: BigInt!
+  # number of swaps during period
+  swapCount: BigInt!
   # opening price of token0
   open: BigDecimal!
   # high price of token0
@@ -384,25 +358,13 @@ type PoolDayData @entity(immutable: false) {
   low: BigDecimal!
   # close price of token0
   close: BigDecimal!
-  # # --- Ascnt-specific fields ---
-  # # number of swaps during period
-  # swapCount: BigInt!
-  # # sum, max price impact during period
-  # sumPriceImpact: BigInt
-  # maxPriceImpact: BigInt
-  # maxPriceImpactSwap: Swap
-  # # sum cumulative price impact during period
-  # sumCumPriceImpact: BigInt
-  # # sum, max of dynamic fee pips during period
-  # sumDynamicFeePips: BigInt
-  # maxDynamicFeePips: BigInt
-  # maxDynamicFeeSwap: Swap
-  # # sum, max error in price impact estimation during period
-  # sumPriceImpactError: BigInt
-  # maxPriceImpactError: BigInt
-  # maxPriceImpactErrorSwap: Swap
-  # # sum illiquidity ratio during period
-  # sumIlliq: BigInt
+  # --- Ascnt-specific fields ---
+  # sum of dynamic fee pips across Ascnt swaps in this period
+  sumDynamicFeePips: BigInt!
+  # max dynamic fee pips observed across Ascnt swaps in this period
+  maxDynamicFeePips: BigInt!
+  # the Ascnt swap that produced maxDynamicFeePips (null until first Ascnt swap in period)
+  maxDynamicFeeSwap: Swap
 }
 
 # hourly stats tracker for pool
@@ -435,6 +397,8 @@ type PoolHourData @entity(immutable: false) {
   feesUSD: BigDecimal!
   # numebr of transactions during period
   txCount: BigInt!
+  # number of swaps during period
+  swapCount: BigInt!
   # opening price of token0
   open: BigDecimal!
   # high price of token0
@@ -443,85 +407,14 @@ type PoolHourData @entity(immutable: false) {
   low: BigDecimal!
   # close price of token0
   close: BigDecimal!
-  # # --- Ascnt-specific fields ---
-  # # number of swaps during period
-  # swapCount: BigInt!
-  # # sum, max price impact during period
-  # sumPriceImpact: BigInt
-  # maxPriceImpact: BigInt
-  # maxPriceImpactSwap: Swap
-  # # sum cumulative price impact during period
-  # sumCumPriceImpact: BigInt
-  # # sum, max of dynamic fee pips during period
-  # sumDynamicFeePips: BigInt
-  # maxDynamicFeePips: BigInt
-  # maxDynamicFeeSwap: Swap
-  # # sum, max error in price impact estimation during period
-  # sumPriceImpactError: BigInt
-  # maxPriceImpactError: BigInt
-  # maxPriceImpactErrorSwap: Swap
-  # # sum illiquidity ratio during period
-  # sumIlliq: BigInt
+  # --- Ascnt-specific fields ---
+  # sum of dynamic fee pips across Ascnt swaps in this period
+  sumDynamicFeePips: BigInt!
+  # max dynamic fee pips observed across Ascnt swaps in this period
+  maxDynamicFeePips: BigInt!
+  # the Ascnt swap that produced maxDynamicFeePips (null until first Ascnt swap in period)
+  maxDynamicFeeSwap: Swap
 }
-
-# # Data accumulated and condensed into day stats for each pool
-# type PoolWeekData @entity(immutable: false) {
-#   # format: <pool address>-<timestamp>
-#   id: ID!
-#   # timestamp rounded to current week by dividing by TODO
-#   date: Int!
-#   # pointer to pool
-#   pool: Pool!
-#   # in range liquidity at end of period
-#   liquidity: BigInt!
-#   # current price tracker at end of period
-#   sqrtPrice: BigInt!
-#   # price of token0 - derived from sqrtPrice
-#   token0Price: BigDecimal!
-#   # price of token1 - derived from sqrtPrice
-#   token1Price: BigDecimal!
-#   # current tick at end of period
-#   tick: BigInt
-#   # tvl derived in USD at end of period
-#   tvlUSD: BigDecimal!
-#   # volume in token0
-#   volumeToken0: BigDecimal!
-#   # volume in token1
-#   volumeToken1: BigDecimal!
-#   # volume in USD
-#   volumeUSD: BigDecimal!
-#   # fees in USD
-#   feesUSD: BigDecimal!
-#   # number of transactions during period
-#   txCount: BigInt!
-#   # opening price of token0
-#   open: BigDecimal!
-#   # high price of token0
-#   high: BigDecimal!
-#   # low price of token0
-#   low: BigDecimal!
-#   # close price of token0
-#   close: BigDecimal!
-#   # --- Ascnt-specific fields ---
-#   # number of swaps during period
-#   swapCount: BigInt!
-#   # sum, max price impact during period
-#   sumPriceImpact: BigInt
-#   maxPriceImpact: BigInt
-#   maxPriceImpactSwap: Swap
-#   # sum cumulative price impact during period
-#   sumCumPriceImpact: BigInt
-#   # sum, max of dynamic fee pips during period
-#   sumDynamicFeePips: BigInt
-#   maxDynamicFeePips: BigInt
-#   maxDynamicFeeSwap: Swap
-#   # sum, max error in price impact estimation during period
-#   sumPriceImpactError: BigInt
-#   maxPriceImpactError: BigInt
-#   maxPriceImpactErrorSwap: Swap
-#   # sum illiquidity ratio during period
-#   sumIlliq: BigInt
-# }
 
 type TokenDayData @entity(immutable: false) {
   # token address concatendated with date
@@ -596,49 +489,14 @@ type Position @entity(immutable: false) {
   origin: String!
   # created time
   createdAtTimestamp: BigInt!
-  # # pool this position is in
-  # pool: Pool!
-  # # helper fields for indexing
-  # token0: Token!
-  # token1: Token!
-  # # lower tick of position
-  # tickLower: BigInt!
-  # # upper tick of position
-  # tickUpper: BigInt!
-  # # total liquidity of position
-  # liquidity: BigInt!
-  # # cumulative position principal flows
-  # depositedToken0: BigDecimal!
-  # depositedToken1: BigDecimal!
-  # withdrawnToken0: BigDecimal!
-  # withdrawnToken1: BigDecimal!
-  
-  # # fees collected by token TODO
-  # # collectedFeesToken0: BigDecimal!
-  # # collectedFeesToken1: BigDecimal!
-
-  # # total deposits in USD
-  # totalDepositedUSD: BigDecimal!
-  # # total withdrawals in USD
-  # totalWithdrawnUSD: BigDecimal!
-  # #total collected in USD
-  # # totalCollectedUSD: BigDecimal!
-
-  # # fee growth for accrual maths
-  # # feeGrowthInside0LastX128: BigInt!
-  # # feeGrowthInside1LastX128: BigInt!
-  # # transaction that created this position
-  # transaction: Transaction!
   # subscribe events
   subscriptions: [Subscribe!]! @derivedFrom(field: "position")
   # unsubscription events
   unsubscriptions: [Unsubscribe!]! @derivedFrom(field: "position")
   # transfer events
   transfers: [Transfer!]! @derivedFrom(field: "position")
-  # # liquidity modifications for this position
-  # modifyLiquiditys: [ModifyLiquidity!]! @derivedFrom(field: "position")
-  # # historical snapshots of this position
-  # snapshots: [PositionSnapshot!]! @derivedFrom(field: "position")
+  # liquidity modifications for this position
+  modifyLiquiditys: [ModifyLiquidity!]! @derivedFrom(field: "position")
 }
 
 type Subscribe @entity(immutable: true) {
@@ -709,7 +567,7 @@ type SwapStaging @entity(immutable: false) {
   transaction: Transaction!
   # pointer to pool
   pool: Pool!
-  # before-swap fields (set by handleBeforeSwap, cleared after merge into Swap)
+  # before-swap fields (set by handleAscntBeforeSwap, cleared after merge into Swap)
   # sqrt(price) of pool before swap, as Q64.96
   sqrtPriceX96Before: BigInt
   # illiquidity ratio before swap
@@ -723,34 +581,3 @@ type SwapStaging @entity(immutable: false) {
   # dynamic fee in pips applied to swap
   dynamicFeePips: BigInt
 }
-
-# type PositionSnapshot @entity(immutable: true) {
-#   # recommended format: <tokenId>-<txHash>-<logIndex>
-#   id: ID!
-#   # pointer to position
-#   position: Position!
-#   # pool at snapshot time
-#   pool: Pool!
-#   # owner at snapshot time
-#   owner: String!
-#   # pointer to transaction
-#   transaction: Transaction!
-#   # block in which snapshot was created
-#   blockNumber: BigInt!
-#   # timestamp of snapshot block
-#   timestamp: BigInt!
-#   # position liquidity at snapshot time
-#   liquidity: BigInt!
-#   # cumulative deposits at snapshot time
-#   depositedToken0: BigDecimal!
-#   depositedToken1: BigDecimal!
-#   # cumulative withdrawals at snapshot time
-#   withdrawnToken0: BigDecimal!
-#   withdrawnToken1: BigDecimal!
-#   # position token amounts at snapshot time
-#   # amountToken0: BigDecimal!
-#   # amountToken1: BigDecimal!
-#   # fee growth checkpoints for historical accrual math
-#   # feeGrowthInside0LastX128: BigInt
-#   # feeGrowthInside1LastX128: BigInt
-# }

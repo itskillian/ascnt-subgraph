@@ -1,9 +1,14 @@
-import { Address, BigInt, log } from '@graphprotocol/graph-ts'
+import { Address, BigInt, Bytes, log } from '@graphprotocol/graph-ts'
 
 import { AggregatorHook } from '../types/PoolManager/AggregatorHook'
 import { ModifyLiquidity as ModifyLiquidityEvent } from '../types/PoolManager/PoolManager'
-import { Bundle, ModifyLiquidity, Pool, PoolManager, Tick, Token } from '../types/schema'
-import { getSubgraphConfig, getUSDStableStableHookAddresses, SubgraphConfig } from '../utils/chains'
+import { Bundle, ModifyLiquidity, Pool, PoolManager, Position, Tick, Token } from '../types/schema'
+import {
+  getPositionManagerAddress,
+  getSubgraphConfig,
+  getUSDStableStableHookAddresses,
+  SubgraphConfig,
+} from '../utils/chains'
 import { ONE_BI } from '../utils/constants'
 import { convertTokenToDecimal, loadTransaction, safeDiv } from '../utils/index'
 import {
@@ -11,7 +16,6 @@ import {
   updatePoolHourData,
   updateTokenDayData,
   updateTokenHourData,
-  updateUniswapDayData,
 } from '../utils/intervalUpdates'
 import { getAmount0, getAmount1 } from '../utils/liquidityMath/liquidityAmounts'
 import { calculateAmountUSD } from '../utils/pricing'
@@ -146,6 +150,20 @@ export function handleModifyLiquidityHelper(
     modifyLiquidity.tickUpper = BigInt.fromI32(event.params.tickUpper)
     modifyLiquidity.logIndex = event.logIndex
 
+    // Link to Position only when routed through canonical PositionManager —
+    // its salt is bytes32(tokenId). Direct LPs use arbitrary salts.
+    const positionManagerAddress = getPositionManagerAddress()
+    if (positionManagerAddress != '' && event.params.sender.equals(Address.fromString(positionManagerAddress))) {
+      // salt is big-endian bytes32(tokenId); BigInt.fromUnsignedBytes is little-endian
+      const tokenId = BigInt.fromUnsignedBytes(Bytes.fromUint8Array(event.params.salt.reverse()))
+      const position = Position.load(tokenId.toString())
+      if (position !== null) {
+        modifyLiquidity.position = position.id
+      } else {
+        log.warning('handleModifyLiquidity: Position {} not found for poolId {}', [tokenId.toString(), poolId])
+      }
+    }
+
     // tick entities
     const lowerTickIdx = event.params.tickLower
     const upperTickIdx = event.params.tickUpper
@@ -173,7 +191,6 @@ export function handleModifyLiquidityHelper(
     lowerTick.save()
     upperTick.save()
 
-    updateUniswapDayData(event, poolManagerAddress)
     updatePoolDayData(event.params.id.toHexString(), event)
     updatePoolHourData(event.params.id.toHexString(), event)
     updateTokenDayData(token0, event)

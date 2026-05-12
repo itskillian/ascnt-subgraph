@@ -1,41 +1,7 @@
-import { ethereum } from '@graphprotocol/graph-ts'
+import { BigInt, ethereum, log } from '@graphprotocol/graph-ts'
 
-import {
-  Bundle,
-  Pool,
-  PoolDayData,
-  PoolHourData,
-  PoolManager,
-  Token,
-  TokenDayData,
-  TokenHourData,
-  UniswapDayData,
-} from './../types/schema'
+import { Bundle, Pool, PoolDayData, PoolHourData, Token, TokenDayData, TokenHourData } from './../types/schema'
 import { ONE_BI, ZERO_BD, ZERO_BI } from './constants'
-
-/**
- * Tracks global aggregate data over daily windows
- * @param event
- */
-export function updateUniswapDayData(event: ethereum.Event, poolId: string): UniswapDayData {
-  const uniswap = PoolManager.load(poolId)!
-  const timestamp = event.block.timestamp.toI32()
-  const dayID = timestamp / 86400 // rounded
-  const dayStartTimestamp = dayID * 86400
-  let uniswapDayData = UniswapDayData.load(dayID.toString())
-  if (uniswapDayData === null) {
-    uniswapDayData = new UniswapDayData(dayID.toString())
-    uniswapDayData.date = dayStartTimestamp
-    uniswapDayData.volumeETH = ZERO_BD
-    uniswapDayData.volumeUSD = ZERO_BD
-    uniswapDayData.volumeUSDUntracked = ZERO_BD
-    uniswapDayData.feesUSD = ZERO_BD
-  }
-  uniswapDayData.tvlUSD = uniswap.totalValueLockedUSD
-  uniswapDayData.txCount = uniswap.txCount
-  uniswapDayData.save()
-  return uniswapDayData as UniswapDayData
-}
 
 export function updatePoolDayData(poolId: string, event: ethereum.Event): PoolDayData {
   const timestamp = event.block.timestamp.toI32()
@@ -53,6 +19,9 @@ export function updatePoolDayData(poolId: string, event: ethereum.Event): PoolDa
     poolDayData.volumeUSD = ZERO_BD
     poolDayData.feesUSD = ZERO_BD
     poolDayData.txCount = ZERO_BI
+    poolDayData.swapCount = ZERO_BI
+    poolDayData.sumDynamicFeePips = ZERO_BI
+    poolDayData.maxDynamicFeePips = ZERO_BI
     poolDayData.open = pool.token0Price
     poolDayData.high = pool.token0Price
     poolDayData.low = pool.token0Price
@@ -93,8 +62,11 @@ export function updatePoolHourData(poolId: string, event: ethereum.Event): PoolH
     poolHourData.volumeToken0 = ZERO_BD
     poolHourData.volumeToken1 = ZERO_BD
     poolHourData.volumeUSD = ZERO_BD
-    poolHourData.txCount = ZERO_BI
     poolHourData.feesUSD = ZERO_BD
+    poolHourData.txCount = ZERO_BI
+    poolHourData.swapCount = ZERO_BI
+    poolHourData.sumDynamicFeePips = ZERO_BI
+    poolHourData.maxDynamicFeePips = ZERO_BI
     poolHourData.open = pool.token0Price
     poolHourData.high = pool.token0Price
     poolHourData.low = pool.token0Price
@@ -127,7 +99,10 @@ export function updateTokenDayData(token: Token, event: ethereum.Event): TokenDa
   const timestamp = event.block.timestamp.toI32()
   const dayID = timestamp / 86400
   const dayStartTimestamp = dayID * 86400
-  const tokenDayID = token.id.toString().concat('-').concat(dayID.toString())
+  const tokenDayID = token.id
+    .toString()
+    .concat('-')
+    .concat(dayID.toString())
   const tokenPrice = token.derivedETH.times(bundle.ethPriceUSD)
 
   let tokenDayData = TokenDayData.load(tokenDayID)
@@ -167,7 +142,10 @@ export function updateTokenHourData(token: Token, event: ethereum.Event): TokenH
   const timestamp = event.block.timestamp.toI32()
   const hourIndex = timestamp / 3600 // get unique hour within unix history
   const hourStartUnix = hourIndex * 3600 // want the rounded effect
-  const tokenHourID = token.id.toString().concat('-').concat(hourIndex.toString())
+  const tokenHourID = token.id
+    .toString()
+    .concat('-')
+    .concat(hourIndex.toString())
   let tokenHourData = TokenHourData.load(tokenHourID)
   const tokenPrice = token.derivedETH.times(bundle.ethPriceUSD)
 
@@ -200,4 +178,35 @@ export function updateTokenHourData(token: Token, event: ethereum.Event): TokenH
   tokenHourData.save()
 
   return tokenHourData as TokenHourData
+}
+
+export function updateDynamicFeeAggregates(poolId: string, timestamp: i32, fee: BigInt, swapId: string): void {
+  const dayID = timestamp / 86400
+  const hourIndex = timestamp / 3600
+  const dayPoolID = poolId.concat('-').concat(dayID.toString())
+  const hourPoolID = poolId.concat('-').concat(hourIndex.toString())
+
+  const poolDayData = PoolDayData.load(dayPoolID)
+  if (poolDayData !== null) {
+    poolDayData.sumDynamicFeePips = poolDayData.sumDynamicFeePips.plus(fee)
+    if (poolDayData.maxDynamicFeeSwap === null || fee.gt(poolDayData.maxDynamicFeePips)) {
+      poolDayData.maxDynamicFeePips = fee
+      poolDayData.maxDynamicFeeSwap = swapId
+    }
+    poolDayData.save()
+  } else {
+    log.warning('PoolDayData not found for dynamic-fee aggregate: {}', [dayPoolID])
+  }
+
+  const poolHourData = PoolHourData.load(hourPoolID)
+  if (poolHourData !== null) {
+    poolHourData.sumDynamicFeePips = poolHourData.sumDynamicFeePips.plus(fee)
+    if (poolHourData.maxDynamicFeeSwap === null || fee.gt(poolHourData.maxDynamicFeePips)) {
+      poolHourData.maxDynamicFeePips = fee
+      poolHourData.maxDynamicFeeSwap = swapId
+    }
+    poolHourData.save()
+  } else {
+    log.warning('PoolHourData not found for dynamic-fee aggregate: {}', [hourPoolID])
+  }
 }
