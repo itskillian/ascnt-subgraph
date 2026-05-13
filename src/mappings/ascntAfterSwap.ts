@@ -1,8 +1,9 @@
 import { BigInt, log, store } from '@graphprotocol/graph-ts'
 
-import { AfterSwap as AfterSwapEvent } from '../types/AscntDivHook/AscntDivHook'
+import { AfterSwap as AscntAfterSwapEvent } from '../types/AscntDivHook/AscntDivHook'
 import { Pool, Swap, SwapStaging } from '../types/schema'
 import { loadTransaction } from '../utils/index'
+import { updateDynamicFeeAggregates } from '../utils/intervalUpdates'
 
 const WAD = BigInt.fromString('1000000000000000000')
 
@@ -18,11 +19,11 @@ function priceImpactRelativeErrorWad(estimated: BigInt | null, real: BigInt): Bi
   return diff.times(WAD).div(real)
 }
 
-export function handleAfterSwap(event: AfterSwapEvent): void {
-  handleAfterSwapHelper(event)
+export function handleAscntAfterSwap(event: AscntAfterSwapEvent): void {
+  handleAscntAfterSwapHelper(event)
 }
 
-export function handleAfterSwapHelper(event: AfterSwapEvent): void {
+export function handleAscntAfterSwapHelper(event: AscntAfterSwapEvent): void {
   const poolId = event.params.poolId.toHexString()
   const pool = Pool.load(poolId)
 
@@ -70,5 +71,12 @@ export function handleAfterSwapHelper(event: AfterSwapEvent): void {
 
   swap.save()
   pool.save()
-  // swapStaging.save()
+
+  // Roll the per-period dynamic-fee aggregates. dynamicFeePips was merged onto
+  // the Swap entity by handleSwap from SwapStaging — it should be set for any
+  // Ascnt-pool swap, but guard defensively.
+  const fee = swap.dynamicFeePips
+  if (fee !== null) {
+    updateDynamicFeeAggregates(poolId, event.block.timestamp.toI32(), fee as BigInt, swap.id)
+  }
 }

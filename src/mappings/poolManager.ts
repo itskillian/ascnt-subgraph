@@ -141,6 +141,7 @@ export function handleInitializeHelper(
   pool.token0 = token0.id
   pool.token1 = token1.id
   pool.feeTier = BigInt.fromI32(event.params.fee)
+  pool.isDynamicFee = event.params.fee == 8388608
   pool.hooks = event.params.hooks.toHexString()
   pool.tickSpacing = BigInt.fromI32(event.params.tickSpacing)
   pool.createdAtTimestamp = event.block.timestamp
@@ -163,6 +164,7 @@ export function handleInitializeHelper(
   pool.volumeUSD = ZERO_BD
   pool.feesUSD = ZERO_BD
   pool.untrackedVolumeUSD = ZERO_BD
+  pool.isAscntPool = false
 
   pool.collectedFeesToken0 = ZERO_BD
   pool.collectedFeesToken1 = ZERO_BD

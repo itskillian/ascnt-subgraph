@@ -1,14 +1,14 @@
 import { BigInt, log } from '@graphprotocol/graph-ts'
 
-import { BeforeSwap as BeforeSwapEvent } from '../types/AscntDivHook/AscntDivHook'
+import { BeforeSwap as AscntBeforeSwapEvent } from '../types/AscntDivHook/AscntDivHook'
 import { Pool, SwapStaging } from '../types/schema'
 import { loadTransaction } from '../utils/index'
 
-export function handleBeforeSwap(event: BeforeSwapEvent): void {
-  handleBeforeSwapHelper(event)
+export function handleAscntBeforeSwap(event: AscntBeforeSwapEvent): void {
+  handleAscntBeforeSwapHelper(event)
 }
 
-export function handleBeforeSwapHelper(event: BeforeSwapEvent): void {
+export function handleAscntBeforeSwapHelper(event: AscntBeforeSwapEvent): void {
   const poolId = event.params.poolId.toHexString()
   const pool = Pool.load(poolId)
 
