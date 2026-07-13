@@ -6,6 +6,13 @@ schema:
 features:
   - nonFatalErrors
   - grafting
+graft:
+  base: Qmci9zip9eU6i7EtxQ1UGYAm6rQspqXgkqeSshei5NzBQd
+  # One block before SimHookMVP's first event (PoolInitialized at 25524687,
+  # PoolConfigured at 25524688) so the new version indexes both. Must also be
+  # >= the base's earliest available block (25524545 — indexer pruning), which
+  # rules out grafting at the hook's creation block (25524390).
+  block: 25524686
 dataSources:
   - source:
       abi: PoolManager
@@ -71,9 +78,9 @@ dataSources:
     name: AscntDivHook
     network: mainnet
     source:
-      address: "0x29d6e0Ff868ba37fd81F84208B1BC6781dFfB0C0"
+      address: "0x38fdC1B79148aBE3c621467e3Cc6556453B0f6C0"
       abi: AscntDivHook
-      startBlock: 24568925
+      startBlock: 25524390
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -85,13 +92,41 @@ dataSources:
         - Pool
       abis:
         - name: AscntDivHook
-          file: ./abis/AscntDivHook.json
+          file: ./abis/SimHookMVP.json
       eventHandlers:
-        - event: AfterSwap(indexed bytes32,uint160,uint256,uint256,int256,uint256,uint256)
+        - event: AfterSwap(indexed bytes32,uint160,uint256,int256,uint256)
           handler: handleAscntAfterSwap
-        - event: BeforeSwap(indexed bytes32,uint160,uint256,uint256,uint256,int256,uint24,uint256)
+        - event: BeforeSwap(indexed bytes32,uint160,uint160,uint256,int256,uint24,uint24,uint256)
           handler: handleAscntBeforeSwap
-        - event: PoolConfigured(indexed bytes32,bool,uint24,uint24,uint24,uint256,uint256,uint256)
+        - event: PoolConfigured(indexed bytes32,bool,uint24,uint24,uint24,uint24,uint256,uint48,uint256)
           handler: handleAscntConfigured
         - event: PoolInitialized(indexed bytes32,indexed address,indexed address,uint24,int24,address,uint160,int24)
           handler: handleAscntInitialized
+  - kind: ethereum
+    name: AscntDivHookLegacy
+    network: mainnet
+    source:
+      address: "0x29d6e0Ff868ba37fd81F84208B1BC6781dFfB0C0"
+      abi: AscntDivHookLegacy
+      startBlock: 24568925
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      file: ./src/mappings/ascntLegacy.mapping.ts
+      entities:
+        - PoolManager
+        - Swap
+        - Pool
+      abis:
+        - name: AscntDivHookLegacy
+          file: ./abis/AscntDivHook.json
+      eventHandlers:
+        - event: AfterSwap(indexed bytes32,uint160,uint256,uint256,int256,uint256,uint256)
+          handler: handleAscntAfterSwapLegacy
+        - event: BeforeSwap(indexed bytes32,uint160,uint256,uint256,uint256,int256,uint24,uint256)
+          handler: handleAscntBeforeSwapLegacy
+        - event: PoolConfigured(indexed bytes32,bool,uint24,uint24,uint24,uint256,uint256,uint256)
+          handler: handleAscntConfiguredLegacy
+        - event: PoolInitialized(indexed bytes32,indexed address,indexed address,uint24,int24,address,uint160,int24)
+          handler: handleAscntInitializedLegacy

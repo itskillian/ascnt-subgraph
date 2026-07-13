@@ -17,10 +17,10 @@ export function handleAscntBeforeSwapHelper(event: AscntBeforeSwapEvent): void {
     return
   }
 
-  pool.sqrtPriceX96Before = event.params.sqrtPriceX96before
-  pool.illiqBefore = event.params.illiqBefore
-  pool.estimatedVolume1 = event.params.estimatedVolume1
-  pool.estimatedPriceImpact = event.params.estimatedPriceImpact
+  // SimHookMVP's BeforeSwap.priceImpact is the pre-swap simulated impact — map it
+  // onto estimatedPriceImpact so the estimated-vs-real error metric keeps working.
+  pool.sqrtPriceX96Before = event.params.sqrtPriceX96Before
+  pool.estimatedPriceImpact = event.params.priceImpact
   pool.decayedCumPriceImpact = event.params.decayedCumPriceImpact
   pool.dynamicFeePips = BigInt.fromI32(event.params.dynamicFeePips)
 
@@ -29,10 +29,8 @@ export function handleAscntBeforeSwapHelper(event: AscntBeforeSwapEvent): void {
   const swapStaging = new SwapStaging(transaction.id + '-' + pool.id.toString())
   swapStaging.transaction = transaction.id
   swapStaging.pool = pool.id
-  swapStaging.sqrtPriceX96Before = event.params.sqrtPriceX96before
-  swapStaging.illiqBefore = event.params.illiqBefore
-  swapStaging.estimatedVolume1 = event.params.estimatedVolume1
-  swapStaging.estimatedPriceImpact = event.params.estimatedPriceImpact
+  swapStaging.sqrtPriceX96Before = event.params.sqrtPriceX96Before
+  swapStaging.estimatedPriceImpact = event.params.priceImpact
   swapStaging.decayedCumPriceImpact = event.params.decayedCumPriceImpact
   swapStaging.dynamicFeePips = BigInt.fromI32(event.params.dynamicFeePips)
 

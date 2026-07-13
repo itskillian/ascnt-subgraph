@@ -8,7 +8,7 @@ import { updateDynamicFeeAggregates } from '../utils/intervalUpdates'
 const WAD = BigInt.fromString('1000000000000000000')
 
 /** |estimated - real| * WAD / real; null if estimate missing or real is zero with non-zero estimate. */
-function priceImpactRelativeErrorWad(estimated: BigInt | null, real: BigInt): BigInt | null {
+export function priceImpactRelativeErrorWad(estimated: BigInt | null, real: BigInt): BigInt | null {
   if (estimated === null) {
     return null
   }
@@ -61,12 +61,10 @@ export function handleAscntAfterSwapHelper(event: AscntAfterSwapEvent): void {
 
   swap.priceImpact = realPriceImpact
   swap.cumPriceImpact = event.params.cumPriceImpact
-  swap.illiq = event.params.illiq
   swap.priceImpactError = priceImpactError
 
   pool.priceImpact = realPriceImpact
   pool.cumPriceImpact = event.params.cumPriceImpact
-  pool.illiq = event.params.illiq
   pool.priceImpactError = priceImpactError
 
   swap.save()
