@@ -3,6 +3,28 @@ import { BigInt, ethereum, log } from '@graphprotocol/graph-ts'
 import { Bundle, Pool, PoolDayData, PoolHourData, Token, TokenDayData, TokenHourData } from './../types/schema'
 import { ONE_BI, ZERO_BD, ZERO_BI } from './constants'
 
+// 2^32 — logIndex occupies the low 32 bits of the composite ordinal.
+const LOG_INDEX_RADIX = BigInt.fromString('4294967296')
+
+// Composite, chain-monotonic ordinal for an event: blockNumber * 2^32 + logIndex.
+// Strictly increasing across the whole chain, so it orders events both across
+// blocks (a period spans many) and within a block. Used to make end-of-period
+// snapshot fields (close/price/tick/tvl) independent of trigger execution order.
+function eventOrdinal(event: ethereum.Event): BigInt {
+  return event.block.number.times(LOG_INDEX_RADIX).plus(event.logIndex)
+}
+
+// True when `ordinal` is at least the ordinal that last wrote the snapshot, i.e.
+// this event is the newest so far in the period and may advance close/price.
+// A null stored ordinal means the field was never guarded (fresh entity or a
+// pre-migration grafted entity) — allow the write.
+function closeCanAdvance(storedOrdinal: BigInt | null, ordinal: BigInt): boolean {
+  if (storedOrdinal === null) {
+    return true
+  }
+  return ordinal.ge(storedOrdinal)
+}
+
 export function updatePoolDayData(poolId: string, event: ethereum.Event): PoolDayData {
   const timestamp = event.block.timestamp.toI32()
   const dayID = timestamp / 86400
@@ -28,6 +50,8 @@ export function updatePoolDayData(poolId: string, event: ethereum.Event): PoolDa
     poolDayData.close = pool.token0Price
   }
 
+  // high/low are order-independent (min/max over the whole period), so they are
+  // always considered — this keeps the depeg wick even when it is not the close.
   if (pool.token0Price.gt(poolDayData.high)) {
     poolDayData.high = pool.token0Price
   }
@@ -35,13 +59,19 @@ export function updatePoolDayData(poolId: string, event: ethereum.Event): PoolDa
     poolDayData.low = pool.token0Price
   }
 
-  poolDayData.liquidity = pool.liquidity
-  poolDayData.sqrtPrice = pool.sqrtPrice
-  poolDayData.token0Price = pool.token0Price
-  poolDayData.token1Price = pool.token1Price
-  poolDayData.close = pool.token0Price
-  poolDayData.tick = pool.tick
-  poolDayData.tvlUSD = pool.totalValueLockedUSD
+  // End-of-period snapshot: only the highest-ordinal event in the period may set
+  // it, so an out-of-order (earlier) event can never clobber the true close.
+  const ordinal = eventOrdinal(event)
+  if (closeCanAdvance(poolDayData.closeOrdinal, ordinal)) {
+    poolDayData.liquidity = pool.liquidity
+    poolDayData.sqrtPrice = pool.sqrtPrice
+    poolDayData.token0Price = pool.token0Price
+    poolDayData.token1Price = pool.token1Price
+    poolDayData.close = pool.token0Price
+    poolDayData.tick = pool.tick
+    poolDayData.tvlUSD = pool.totalValueLockedUSD
+    poolDayData.closeOrdinal = ordinal
+  }
   poolDayData.txCount = poolDayData.txCount.plus(ONE_BI)
   poolDayData.save()
 
@@ -73,6 +103,8 @@ export function updatePoolHourData(poolId: string, event: ethereum.Event): PoolH
     poolHourData.close = pool.token0Price
   }
 
+  // high/low are order-independent (min/max over the whole period), so they are
+  // always considered — this keeps the depeg wick even when it is not the close.
   if (pool.token0Price.gt(poolHourData.high)) {
     poolHourData.high = pool.token0Price
   }
@@ -80,13 +112,19 @@ export function updatePoolHourData(poolId: string, event: ethereum.Event): PoolH
     poolHourData.low = pool.token0Price
   }
 
-  poolHourData.liquidity = pool.liquidity
-  poolHourData.sqrtPrice = pool.sqrtPrice
-  poolHourData.token0Price = pool.token0Price
-  poolHourData.token1Price = pool.token1Price
-  poolHourData.close = pool.token0Price
-  poolHourData.tick = pool.tick
-  poolHourData.tvlUSD = pool.totalValueLockedUSD
+  // End-of-period snapshot: only the highest-ordinal event in the period may set
+  // it, so an out-of-order (earlier) event can never clobber the true close.
+  const ordinal = eventOrdinal(event)
+  if (closeCanAdvance(poolHourData.closeOrdinal, ordinal)) {
+    poolHourData.liquidity = pool.liquidity
+    poolHourData.sqrtPrice = pool.sqrtPrice
+    poolHourData.token0Price = pool.token0Price
+    poolHourData.token1Price = pool.token1Price
+    poolHourData.close = pool.token0Price
+    poolHourData.tick = pool.tick
+    poolHourData.tvlUSD = pool.totalValueLockedUSD
+    poolHourData.closeOrdinal = ordinal
+  }
   poolHourData.txCount = poolHourData.txCount.plus(ONE_BI)
   poolHourData.save()
 
@@ -99,7 +137,10 @@ export function updateTokenDayData(token: Token, event: ethereum.Event): TokenDa
   const timestamp = event.block.timestamp.toI32()
   const dayID = timestamp / 86400
   const dayStartTimestamp = dayID * 86400
-  const tokenDayID = token.id.toString().concat('-').concat(dayID.toString())
+  const tokenDayID = token.id
+    .toString()
+    .concat('-')
+    .concat(dayID.toString())
   const tokenPrice = token.derivedETH.times(bundle.ethPriceUSD)
 
   let tokenDayData = TokenDayData.load(tokenDayID)
@@ -125,10 +166,16 @@ export function updateTokenDayData(token: Token, event: ethereum.Event): TokenDa
     tokenDayData.low = tokenPrice
   }
 
-  tokenDayData.close = tokenPrice
-  tokenDayData.priceUSD = token.derivedETH.times(bundle.ethPriceUSD)
-  tokenDayData.totalValueLocked = token.totalValueLocked
-  tokenDayData.totalValueLockedUSD = token.totalValueLockedUSD
+  // End-of-period snapshot: only the highest-ordinal event in the period may set
+  // it, so an out-of-order (earlier) event can never clobber the true close.
+  const ordinal = eventOrdinal(event)
+  if (closeCanAdvance(tokenDayData.closeOrdinal, ordinal)) {
+    tokenDayData.close = tokenPrice
+    tokenDayData.priceUSD = tokenPrice
+    tokenDayData.totalValueLocked = token.totalValueLocked
+    tokenDayData.totalValueLockedUSD = token.totalValueLockedUSD
+    tokenDayData.closeOrdinal = ordinal
+  }
   tokenDayData.save()
 
   return tokenDayData as TokenDayData
@@ -139,7 +186,10 @@ export function updateTokenHourData(token: Token, event: ethereum.Event): TokenH
   const timestamp = event.block.timestamp.toI32()
   const hourIndex = timestamp / 3600 // get unique hour within unix history
   const hourStartUnix = hourIndex * 3600 // want the rounded effect
-  const tokenHourID = token.id.toString().concat('-').concat(hourIndex.toString())
+  const tokenHourID = token.id
+    .toString()
+    .concat('-')
+    .concat(hourIndex.toString())
   let tokenHourData = TokenHourData.load(tokenHourID)
   const tokenPrice = token.derivedETH.times(bundle.ethPriceUSD)
 
@@ -165,10 +215,16 @@ export function updateTokenHourData(token: Token, event: ethereum.Event): TokenH
     tokenHourData.low = tokenPrice
   }
 
-  tokenHourData.close = tokenPrice
-  tokenHourData.priceUSD = tokenPrice
-  tokenHourData.totalValueLocked = token.totalValueLocked
-  tokenHourData.totalValueLockedUSD = token.totalValueLockedUSD
+  // End-of-period snapshot: only the highest-ordinal event in the period may set
+  // it, so an out-of-order (earlier) event can never clobber the true close.
+  const ordinal = eventOrdinal(event)
+  if (closeCanAdvance(tokenHourData.closeOrdinal, ordinal)) {
+    tokenHourData.close = tokenPrice
+    tokenHourData.priceUSD = tokenPrice
+    tokenHourData.totalValueLocked = token.totalValueLocked
+    tokenHourData.totalValueLockedUSD = token.totalValueLockedUSD
+    tokenHourData.closeOrdinal = ordinal
+  }
   tokenHourData.save()
 
   return tokenHourData as TokenHourData

@@ -358,6 +358,11 @@ type PoolDayData @entity(immutable: false) {
   low: BigDecimal!
   # close price of token0
   close: BigDecimal!
+  # ordinal (blockNumber * 2^32 + logIndex) of the event that last set the
+  # end-of-period snapshot (close/price/tick/tvl). Guards against a lower-ordinal
+  # (earlier) event overwriting values set by a higher-ordinal (later) event when
+  # triggers execute out of order within a block. Nullable for graft compatibility.
+  closeOrdinal: BigInt
   # --- Ascnt-specific fields ---
   # sum of dynamic fee pips across Ascnt swaps in this period
   sumDynamicFeePips: BigInt!
@@ -407,6 +412,11 @@ type PoolHourData @entity(immutable: false) {
   low: BigDecimal!
   # close price of token0
   close: BigDecimal!
+  # ordinal (blockNumber * 2^32 + logIndex) of the event that last set the
+  # end-of-period snapshot (close/price/tick/tvl). Guards against a lower-ordinal
+  # (earlier) event overwriting values set by a higher-ordinal (later) event when
+  # triggers execute out of order within a block. Nullable for graft compatibility.
+  closeOrdinal: BigInt
   # --- Ascnt-specific fields ---
   # sum of dynamic fee pips across Ascnt swaps in this period
   sumDynamicFeePips: BigInt!
@@ -445,6 +455,9 @@ type TokenDayData @entity(immutable: false) {
   low: BigDecimal!
   # close price USD
   close: BigDecimal!
+  # ordinal (blockNumber * 2^32 + logIndex) of the event that last set the
+  # end-of-period snapshot (close/priceUSD/tvl); see PoolDayData.closeOrdinal.
+  closeOrdinal: BigInt
 }
 
 type TokenHourData @entity(immutable: false) {
@@ -476,6 +489,9 @@ type TokenHourData @entity(immutable: false) {
   low: BigDecimal!
   # close price USD
   close: BigDecimal!
+  # ordinal (blockNumber * 2^32 + logIndex) of the event that last set the
+  # end-of-period snapshot (close/priceUSD/tvl); see PoolDayData.closeOrdinal.
+  closeOrdinal: BigInt
 }
 
 type Position @entity(immutable: false) {
