@@ -350,18 +350,22 @@ type PoolDayData @entity(immutable: false) {
   txCount: BigInt!
   # number of swaps during period
   swapCount: BigInt!
-  # opening price of token0
-  open: BigDecimal!
-  # high price of token0
-  high: BigDecimal!
-  # low price of token0
-  low: BigDecimal!
-  # close price of token0
-  close: BigDecimal!
-  # ordinal (blockNumber * 2^32 + logIndex) of the event that last set the
-  # end-of-period snapshot (close/price/tick/tvl). Guards against a lower-ordinal
-  # (earlier) event overwriting values set by a higher-ordinal (later) event when
-  # triggers execute out of order within a block. Nullable for graft compatibility.
+  # OHLC of token0 price, written by swaps ONLY: null until the period's first
+  # swap (liquidity events update state snapshots but never candles, so a
+  # candle's existence implies real trading). open = the entering price (the
+  # previous close the pool sat at), so candles are gapless across periods.
+  # opening price of token0 (null until first swap of period)
+  open: BigDecimal
+  # high price of token0 (null until first swap of period)
+  high: BigDecimal
+  # low price of token0 (null until first swap of period)
+  low: BigDecimal
+  # close price of token0 (null until first swap of period)
+  close: BigDecimal
+  # ordinal (blockNumber * 2^32 + logIndex) of the swap that last set close.
+  # Only swaps advance it (null until the period's first swap); guards close
+  # against a lower-ordinal (earlier) swap overwriting a higher-ordinal (later)
+  # one if triggers ever replay out of order.
   closeOrdinal: BigInt
   # --- Ascnt-specific fields ---
   # sum of dynamic fee pips across Ascnt swaps in this period
@@ -404,18 +408,19 @@ type PoolHourData @entity(immutable: false) {
   txCount: BigInt!
   # number of swaps during period
   swapCount: BigInt!
-  # opening price of token0
-  open: BigDecimal!
-  # high price of token0
-  high: BigDecimal!
-  # low price of token0
-  low: BigDecimal!
-  # close price of token0
-  close: BigDecimal!
-  # ordinal (blockNumber * 2^32 + logIndex) of the event that last set the
-  # end-of-period snapshot (close/price/tick/tvl). Guards against a lower-ordinal
-  # (earlier) event overwriting values set by a higher-ordinal (later) event when
-  # triggers execute out of order within a block. Nullable for graft compatibility.
+  # OHLC of token0 price, written by swaps ONLY; see PoolDayData.open.
+  # opening price of token0 (null until first swap of period)
+  open: BigDecimal
+  # high price of token0 (null until first swap of period)
+  high: BigDecimal
+  # low price of token0 (null until first swap of period)
+  low: BigDecimal
+  # close price of token0 (null until first swap of period)
+  close: BigDecimal
+  # ordinal (blockNumber * 2^32 + logIndex) of the swap that last set close.
+  # Only swaps advance it (null until the period's first swap); guards close
+  # against a lower-ordinal (earlier) swap overwriting a higher-ordinal (later)
+  # one if triggers ever replay out of order.
   closeOrdinal: BigInt
   # --- Ascnt-specific fields ---
   # sum of dynamic fee pips across Ascnt swaps in this period
@@ -447,16 +452,18 @@ type TokenDayData @entity(immutable: false) {
   priceUSD: BigDecimal!
   # fees in USD
   feesUSD: BigDecimal!
-  # opening price USD
-  open: BigDecimal!
-  # high price USD
-  high: BigDecimal!
-  # low price USD
-  low: BigDecimal!
-  # close price USD
-  close: BigDecimal!
-  # ordinal (blockNumber * 2^32 + logIndex) of the event that last set the
-  # end-of-period snapshot (close/priceUSD/tvl); see PoolDayData.closeOrdinal.
+  # OHLC of token USD price, written by swaps ONLY; see PoolDayData.open.
+  # opening price USD (null until first swap of period)
+  open: BigDecimal
+  # high price USD (null until first swap of period)
+  high: BigDecimal
+  # low price USD (null until first swap of period)
+  low: BigDecimal
+  # close price USD (null until first swap of period)
+  close: BigDecimal
+  # ordinal (blockNumber * 2^32 + logIndex) of the swap that last set close;
+  # only swaps advance it (null until the period's first swap); see
+  # PoolDayData.closeOrdinal.
   closeOrdinal: BigInt
 }
 
@@ -481,16 +488,18 @@ type TokenHourData @entity(immutable: false) {
   priceUSD: BigDecimal!
   # fees in USD
   feesUSD: BigDecimal!
-  # opening price USD
-  open: BigDecimal!
-  # high price USD
-  high: BigDecimal!
-  # low price USD
-  low: BigDecimal!
-  # close price USD
-  close: BigDecimal!
-  # ordinal (blockNumber * 2^32 + logIndex) of the event that last set the
-  # end-of-period snapshot (close/priceUSD/tvl); see PoolDayData.closeOrdinal.
+  # OHLC of token USD price, written by swaps ONLY; see PoolDayData.open.
+  # opening price USD (null until first swap of period)
+  open: BigDecimal
+  # high price USD (null until first swap of period)
+  high: BigDecimal
+  # low price USD (null until first swap of period)
+  low: BigDecimal
+  # close price USD (null until first swap of period)
+  close: BigDecimal
+  # ordinal (blockNumber * 2^32 + logIndex) of the swap that last set close;
+  # only swaps advance it (null until the period's first swap); see
+  # PoolDayData.closeOrdinal.
   closeOrdinal: BigInt
 }
 

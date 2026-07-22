@@ -48,6 +48,13 @@ export function handleSwapHelper(event: SwapEvent, subgraphConfig: SubgraphConfi
   const token1 = Token.load(pool.token1)
 
   if (token0 && token1) {
+    // Entering (pre-swap) prices, captured before this swap mutates pool price,
+    // bundle.ethPriceUSD, or derivedETH. The pool sits at these until the swap
+    // executes, so they are the `open` when this swap starts a new candle bucket.
+    const token0PriceBefore = pool.token0Price
+    const token0PriceUSDBefore = token0.derivedETH.times(bundle.ethPriceUSD)
+    const token1PriceUSDBefore = token1.derivedETH.times(bundle.ethPriceUSD)
+
     // amounts - 0/1 are token deltas: can be positive or negative
     // Unlike V3, a negative amount represents that amount is being sent to the pool and vice versa, so invert the sign
     const amount0 = convertTokenToDecimal(event.params.amount0, token0.decimals).times(BigDecimal.fromString('-1'))
@@ -213,17 +220,18 @@ export function handleSwapHelper(event: SwapEvent, subgraphConfig: SubgraphConfi
       swapStaging.save()
     }
 
-    // interval data
-    const poolDayData = updatePoolDayData(event.params.id.toHexString(), event)
-    const poolHourData = updatePoolHourData(event.params.id.toHexString(), event)
+    // interval data — pass the in-memory pool (post-swap price/tick/tvl already
+    // applied) so candles reflect THIS swap, not the last-saved (previous) one.
+    const poolDayData = updatePoolDayData(pool, event, token0PriceBefore)
+    const poolHourData = updatePoolHourData(pool, event, token0PriceBefore)
 
     poolDayData.swapCount = poolDayData.swapCount.plus(ONE_BI)
     poolHourData.swapCount = poolHourData.swapCount.plus(ONE_BI)
 
-    const token0DayData = updateTokenDayData(token0, event)
-    const token1DayData = updateTokenDayData(token1, event)
-    const token0HourData = updateTokenHourData(token0, event)
-    const token1HourData = updateTokenHourData(token1, event)
+    const token0DayData = updateTokenDayData(token0, event, token0PriceUSDBefore)
+    const token1DayData = updateTokenDayData(token1, event, token1PriceUSDBefore)
+    const token0HourData = updateTokenHourData(token0, event, token0PriceUSDBefore)
+    const token1HourData = updateTokenHourData(token1, event, token1PriceUSDBefore)
 
     poolDayData.volumeUSD = poolDayData.volumeUSD.plus(amountTotalUSDTracked)
     poolDayData.volumeToken0 = poolDayData.volumeToken0.plus(amount0Abs)
