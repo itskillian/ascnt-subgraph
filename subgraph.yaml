@@ -7,13 +7,16 @@ features:
   - nonFatalErrors
   - grafting
 graft:
-  # Base is the live SimHookMVP deployment, which itself grafted at this same
-  # block — so this re-grafts from its inherited starting state and re-indexes
-  # the whole SimHookMVP era with the fixed OHLC semantics (one block before
-  # PoolInitialized at 25524687 / PoolConfigured at 25524688). Requires the
-  # base to retain queryable state at exactly this block (indexer pruning).
+  # Base is the live SimHookMVP deployment, grafted near head (2026-07-22).
+  # Studio prunes entity history to a near-head sliding window, so grafts can
+  # only target very recent blocks — re-grafting at the SimHookMVP start
+  # (25524686) was rejected (no reachable deployment retains that state).
+  # Buckets before this block therefore keep the old candle semantics
+  # (any-event OHLC, one-swap-lagged closes); the swaps-only/AMM-open fix
+  # applies from here forward. Healing full history requires a graft-less
+  # resync from PoolManager genesis under a new version label.
   base: QmXHVmWPo83ovhhAyZY4txaNnbnfBLeAjsYDYpFJ4E8iF2
-  block: 25524686
+  block: 25590567
 dataSources:
   - source:
       abi: PoolManager
