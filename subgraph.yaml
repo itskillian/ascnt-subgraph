@@ -7,11 +7,12 @@ features:
   - nonFatalErrors
   - grafting
 graft:
-  base: Qmci9zip9eU6i7EtxQ1UGYAm6rQspqXgkqeSshei5NzBQd
-  # One block before SimHookMVP's first event (PoolInitialized at 25524687,
-  # PoolConfigured at 25524688) so the new version indexes both. Must also be
-  # >= the base's earliest available block (25524545 — indexer pruning), which
-  # rules out grafting at the hook's creation block (25524390).
+  # Base is the live SimHookMVP deployment, which itself grafted at this same
+  # block — so this re-grafts from its inherited starting state and re-indexes
+  # the whole SimHookMVP era with the fixed OHLC semantics (one block before
+  # PoolInitialized at 25524687 / PoolConfigured at 25524688). Requires the
+  # base to retain queryable state at exactly this block (indexer pruning).
+  base: QmXHVmWPo83ovhhAyZY4txaNnbnfBLeAjsYDYpFJ4E8iF2
   block: 25524686
 dataSources:
   - source:
