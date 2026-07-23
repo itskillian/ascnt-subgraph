@@ -191,12 +191,15 @@ export function handleModifyLiquidityHelper(
     lowerTick.save()
     upperTick.save()
 
-    updatePoolDayData(event.params.id.toHexString(), event)
-    updatePoolHourData(event.params.id.toHexString(), event)
-    updateTokenDayData(token0, event)
-    updateTokenDayData(token1, event)
-    updateTokenHourData(token0, event)
-    updateTokenHourData(token1, event)
+    // Null entering price = not a swap: updates the period's liquidity/tvl
+    // state snapshot (from the in-memory pool, so it reflects this event) but
+    // never writes OHLC — candles only exist where real trading happened.
+    updatePoolDayData(pool, event, null)
+    updatePoolHourData(pool, event, null)
+    updateTokenDayData(token0, event, null)
+    updateTokenDayData(token1, event, null)
+    updateTokenHourData(token0, event, null)
+    updateTokenHourData(token1, event, null)
 
     token0.save()
     token1.save()

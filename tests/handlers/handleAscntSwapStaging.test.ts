@@ -27,11 +27,11 @@ import {
 // Pool A fixtures (USDC/WETH) — used by both the single-pool test and as the first pool
 // in the multi-pool test.
 class BeforeFixture {
-  sqrtPriceX96before: string
-  illiqBefore: string
-  estimatedVolume1: string
-  estimatedPriceImpact: string
+  sqrtPriceX96Before: string
+  sqrtPriceX96AfterSim: string
+  priceImpact: string
   decayedCumPriceImpact: string
+  effectiveMinFee: i32
   dynamicFeePips: i32
   timestamp: string
 }
@@ -48,19 +48,17 @@ class SwapFixture {
 
 class AfterFixture {
   sqrtPriceX96after: string
-  volume1: string
   priceImpact: string
   cumPriceImpact: string
-  illiq: string
   timestamp: string
 }
 
 const BEFORE_A: BeforeFixture = {
-  sqrtPriceX96before: '79228162514264337593543950336',
-  illiqBefore: '12345',
-  estimatedVolume1: '1000000000000000000',
-  estimatedPriceImpact: '500000000000000',
+  sqrtPriceX96Before: '79228162514264337593543950336',
+  sqrtPriceX96AfterSim: '79228162514264337514315787821',
+  priceImpact: '500000000000000',
   decayedCumPriceImpact: '250000000000000',
+  effectiveMinFee: 400,
   dynamicFeePips: 3000,
   timestamp: '1700000000',
 }
@@ -77,20 +75,21 @@ const SWAP_A: SwapFixture = {
 
 const AFTER_A: AfterFixture = {
   sqrtPriceX96after: '79228162514264337514315787821',
-  volume1: '10000',
   priceImpact: '480000000000000',
   cumPriceImpact: '730000000000000',
-  illiq: '13000',
   timestamp: '1700000000',
 }
 
+// |500000000000000 - 480000000000000| * 1e18 / 480000000000000, truncated
+const PRICE_IMPACT_ERROR_A = '41666666666666666'
+
 // Pool B fixtures (WBTC/WETH) — distinct values so cross-contamination would be visible.
 const BEFORE_B: BeforeFixture = {
-  sqrtPriceX96before: '79228162514264337593543950336',
-  illiqBefore: '99999',
-  estimatedVolume1: '2000000000000000000',
-  estimatedPriceImpact: '700000000000000',
+  sqrtPriceX96Before: '79228162514264337593543950336',
+  sqrtPriceX96AfterSim: '79228162514264337514315787821',
+  priceImpact: '700000000000000',
   decayedCumPriceImpact: '350000000000000',
+  effectiveMinFee: 600,
   dynamicFeePips: 5000,
   timestamp: '1700000000',
 }
@@ -107,10 +106,8 @@ const SWAP_B: SwapFixture = {
 
 const AFTER_B: AfterFixture = {
   sqrtPriceX96after: '79228162514264337514315787821',
-  volume1: '20',
   priceImpact: '680000000000000',
   cumPriceImpact: '1030000000000000',
-  illiq: '105000',
   timestamp: '1700000000',
 }
 
@@ -126,22 +123,19 @@ function makeBeforeSwapEvent(poolId: string, fixture: BeforeFixture, logIndex: i
     [
       new ethereum.EventParam('poolId', ethereum.Value.fromFixedBytes(poolIdBytes)),
       new ethereum.EventParam(
-        'sqrtPriceX96before',
-        ethereum.Value.fromUnsignedBigInt(BigInt.fromString(fixture.sqrtPriceX96before)),
-      ),
-      new ethereum.EventParam('illiqBefore', ethereum.Value.fromUnsignedBigInt(BigInt.fromString(fixture.illiqBefore))),
-      new ethereum.EventParam(
-        'estimatedVolume1',
-        ethereum.Value.fromUnsignedBigInt(BigInt.fromString(fixture.estimatedVolume1)),
+        'sqrtPriceX96Before',
+        ethereum.Value.fromUnsignedBigInt(BigInt.fromString(fixture.sqrtPriceX96Before)),
       ),
       new ethereum.EventParam(
-        'estimatedPriceImpact',
-        ethereum.Value.fromUnsignedBigInt(BigInt.fromString(fixture.estimatedPriceImpact)),
+        'sqrtPriceX96AfterSim',
+        ethereum.Value.fromUnsignedBigInt(BigInt.fromString(fixture.sqrtPriceX96AfterSim)),
       ),
+      new ethereum.EventParam('priceImpact', ethereum.Value.fromUnsignedBigInt(BigInt.fromString(fixture.priceImpact))),
       new ethereum.EventParam(
         'decayedCumPriceImpact',
         ethereum.Value.fromSignedBigInt(BigInt.fromString(fixture.decayedCumPriceImpact)),
       ),
+      new ethereum.EventParam('effectiveMinFee', ethereum.Value.fromI32(fixture.effectiveMinFee)),
       new ethereum.EventParam('dynamicFeePips', ethereum.Value.fromI32(fixture.dynamicFeePips)),
       new ethereum.EventParam('timestamp', ethereum.Value.fromUnsignedBigInt(BigInt.fromString(fixture.timestamp))),
     ],
@@ -187,13 +181,11 @@ function makeAfterSwapEvent(poolId: string, fixture: AfterFixture, logIndex: i32
         'sqrtPriceX96',
         ethereum.Value.fromUnsignedBigInt(BigInt.fromString(fixture.sqrtPriceX96after)),
       ),
-      new ethereum.EventParam('volume1', ethereum.Value.fromUnsignedBigInt(BigInt.fromString(fixture.volume1))),
       new ethereum.EventParam('priceImpact', ethereum.Value.fromUnsignedBigInt(BigInt.fromString(fixture.priceImpact))),
       new ethereum.EventParam(
         'cumPriceImpact',
         ethereum.Value.fromSignedBigInt(BigInt.fromString(fixture.cumPriceImpact)),
       ),
-      new ethereum.EventParam('illiq', ethereum.Value.fromUnsignedBigInt(BigInt.fromString(fixture.illiq))),
       new ethereum.EventParam('timestamp', ethereum.Value.fromUnsignedBigInt(BigInt.fromString(fixture.timestamp))),
     ],
     MOCK_EVENT.receipt,
@@ -230,13 +222,14 @@ describe('Ascnt swap-staging pipeline', () => {
     handleAscntBeforeSwapHelper(makeBeforeSwapEvent(USDC_WETH_POOL_ID, BEFORE_A, 0))
 
     assert.fieldEquals('SwapStaging', swapStagingId, 'pool', USDC_WETH_POOL_ID)
-    assert.fieldEquals('SwapStaging', swapStagingId, 'sqrtPriceX96Before', BEFORE_A.sqrtPriceX96before)
+    assert.fieldEquals('SwapStaging', swapStagingId, 'sqrtPriceX96Before', BEFORE_A.sqrtPriceX96Before)
+    assert.fieldEquals('SwapStaging', swapStagingId, 'estimatedPriceImpact', BEFORE_A.priceImpact)
     assert.fieldEquals('SwapStaging', swapStagingId, 'dynamicFeePips', BEFORE_A.dynamicFeePips.toString())
 
     handleSwapHelper(makeSwapEvent(USDC_WETH_POOL_ID, SWAP_A, 1), TEST_CONFIG)
 
     assert.fieldEquals('SwapStaging', swapStagingId, 'swapId', swapEntityId)
-    assert.fieldEquals('Swap', swapEntityId, 'sqrtPriceX96Before', BEFORE_A.sqrtPriceX96before)
+    assert.fieldEquals('Swap', swapEntityId, 'sqrtPriceX96Before', BEFORE_A.sqrtPriceX96Before)
     assert.fieldEquals('Swap', swapEntityId, 'dynamicFeePips', BEFORE_A.dynamicFeePips.toString())
 
     handleAscntAfterSwapHelper(makeAfterSwapEvent(USDC_WETH_POOL_ID, AFTER_A, 2))
@@ -244,7 +237,7 @@ describe('Ascnt swap-staging pipeline', () => {
     assert.notInStore('SwapStaging', swapStagingId)
     assert.fieldEquals('Swap', swapEntityId, 'priceImpact', AFTER_A.priceImpact)
     assert.fieldEquals('Swap', swapEntityId, 'cumPriceImpact', AFTER_A.cumPriceImpact)
-    assert.fieldEquals('Swap', swapEntityId, 'illiq', AFTER_A.illiq)
+    assert.fieldEquals('Swap', swapEntityId, 'priceImpactError', PRICE_IMPACT_ERROR_A)
 
     assert.fieldEquals('PoolDayData', poolDayDataId, 'sumDynamicFeePips', BEFORE_A.dynamicFeePips.toString())
     assert.fieldEquals('PoolDayData', poolDayDataId, 'maxDynamicFeePips', BEFORE_A.dynamicFeePips.toString())
@@ -300,12 +293,10 @@ describe('Ascnt swap-staging pipeline', () => {
     assert.fieldEquals('Swap', swapAId, 'pool', USDC_WETH_POOL_ID)
     assert.fieldEquals('Swap', swapAId, 'dynamicFeePips', BEFORE_A.dynamicFeePips.toString())
     assert.fieldEquals('Swap', swapAId, 'priceImpact', AFTER_A.priceImpact)
-    assert.fieldEquals('Swap', swapAId, 'illiq', AFTER_A.illiq)
 
     assert.fieldEquals('Swap', swapBId, 'pool', WBTC_WETH_POOL_ID)
     assert.fieldEquals('Swap', swapBId, 'dynamicFeePips', BEFORE_B.dynamicFeePips.toString())
     assert.fieldEquals('Swap', swapBId, 'priceImpact', AFTER_B.priceImpact)
-    assert.fieldEquals('Swap', swapBId, 'illiq', AFTER_B.illiq)
 
     // Per-pool day aggregates each see their own dynamicFeePips and Swap pointer.
     assert.fieldEquals('PoolDayData', poolADayDataId, 'sumDynamicFeePips', BEFORE_A.dynamicFeePips.toString())

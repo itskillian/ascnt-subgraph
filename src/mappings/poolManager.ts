@@ -198,8 +198,11 @@ export function handleInitializeHelper(
     bundle.ethPriceUSD = getNativePriceInUSD(stablecoinWrappedNativePoolId, stablecoinIsToken0)
   }
   bundle.save()
-  updatePoolDayData(poolId, event)
-  updatePoolHourData(poolId, event)
+  // Null entering price = not a swap: the init posts a price but no trade
+  // happened, so the bucket gets a state snapshot and no candle. The first
+  // real swap opens the candle at this standing price.
+  updatePoolDayData(pool, event, null)
+  updatePoolHourData(pool, event, null)
   token1.derivedETH = findNativePerToken(token1, wrappedNativeAddress, stablecoinAddresses, minimumNativeLocked)
   token0.derivedETH = findNativePerToken(token0, wrappedNativeAddress, stablecoinAddresses, minimumNativeLocked)
 

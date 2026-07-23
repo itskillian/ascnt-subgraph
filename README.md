@@ -11,7 +11,24 @@
 
 1. Create a new subgraph config in `src/utils/chains.ts`. This will require adding a new `<NETWORK_NAME>_NETWORK_NAME` const for the corresponding network.
 2. Add a new entry in `networks.json` for the new chain. The network name should be derived from the CLI Name in The Graph's [supported networks documenation](https://thegraph.com/docs/en/developing/supported-networks/). The factory address can be derived from Uniswap's deployments documentation (not yet available).
-3. To deploy to Alchemy, run the following command:
+
+### Deploying
+
+This subgraph is deployed to The Graph (Subgraph Studio):
+
+```bash
+# one-time: deploy key from your subgraph's page at thegraph.com/studio
+npx graph auth --studio <DEPLOY_KEY>
+
+yarn run deploy:studio <SUBGRAPH_SLUG> --version-label <VERSION_LABEL>
+```
+
+If the manifest contains a `graft:` block, it is applied by the deploy itself — the
+base deployment ID must be a previous version of this subgraph so the indexer can
+resolve it.
+
+<details>
+<summary>Deploying to Alchemy instead (upstream flow, unused)</summary>
 
 ```
 yarn run deploy:alchemy --
@@ -21,7 +38,14 @@ yarn run deploy:alchemy --
   --network <NETWORK_NAME>
 ```
 
+</details>
+
 ## Generating subgraph.yaml
+
+> **Warning:** `generate-subgraph` only templates the PoolManager and PositionManager
+> data sources. Running it will silently DROP the AscntDivHook / AscntDivHookLegacy
+> data sources and the `graft:` block from `subgraph.yaml`. Do not use it for mainnet
+> until the script is taught about the hook data sources.
 
 The `subgraph.yaml` file can be automatically generated from the `networks.json` configuration for a specific network. This ensures that all contract addresses and start blocks are correctly synchronized.
 

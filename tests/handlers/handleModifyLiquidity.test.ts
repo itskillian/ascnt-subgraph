@@ -1,9 +1,9 @@
 import { Address, BigDecimal, BigInt, Bytes, ethereum } from '@graphprotocol/graph-ts'
-import { afterEach, beforeEach, clearStore, describe, test } from 'matchstick-as'
+import { afterEach, assert, beforeEach, clearStore, describe, test } from 'matchstick-as'
 
 import { handleModifyLiquidityHelper } from '../../src/mappings/modifyLiquidity'
 import { ModifyLiquidity } from '../../src/types/PoolManager/PoolManager'
-import { Bundle, Pool, Token } from '../../src/types/schema'
+import { Bundle, Pool, PoolHourData, Token } from '../../src/types/schema'
 import { ONE_BD } from '../../src/utils/constants'
 import { convertTokenToDecimal, fastExponentiation, safeDiv } from '../../src/utils/index'
 import { TickMath } from '../../src/utils/liquidityMath/tickMath'
@@ -367,5 +367,31 @@ describe('handleModifyLiquidity', () => {
         ['amount1', expectedAmount1.toString()],
       ],
     )
+  })
+
+  test('liquidity events snapshot period state but never write a candle', () => {
+    // put the pools tick in range so the add moves pool.liquidity
+    const pool = Pool.load(USDC_WETH_POOL_ID)!
+    pool.tick = BigInt.fromI32(MODIFY_LIQUIDITY_FIXTURE_ADD.tickLower + MODIFY_LIQUIDITY_FIXTURE_ADD.tickUpper).div(
+      BigInt.fromI32(2),
+    )
+    pool.sqrtPrice = TickMath.getSqrtRatioAtTick(pool.tick!.toI32())
+    pool.save()
+
+    handleModifyLiquidityHelper(MODIFY_LIQUIDITY_EVENT_ADD, TEST_CONFIG)
+
+    const hourId = MOCK_EVENT.block.timestamp.toI32() / 3600
+    const hourEntity = USDC_WETH_POOL_ID + '-' + hourId.toString()
+
+    // The state snapshot reflects THIS event (in-range add moved pool.liquidity)...
+    assert.fieldEquals('PoolHourData', hourEntity, 'liquidity', MODIFY_LIQUIDITY_FIXTURE_ADD.liquidityDelta.toString())
+    // ...but the bucket has no candle: neither pool init nor a liquidity event
+    // is a swap, and a rendered candle must imply real trading.
+    const hourData = PoolHourData.load(hourEntity)!
+    assert.assertTrue(hourData.open === null)
+    assert.assertTrue(hourData.high === null)
+    assert.assertTrue(hourData.low === null)
+    assert.assertTrue(hourData.close === null)
+    assert.assertTrue(hourData.closeOrdinal === null)
   })
 })

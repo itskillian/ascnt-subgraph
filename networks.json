@@ -129,6 +129,10 @@
       "startBlock": 21689089
     },
     "AscntDivHook": {
+      "address": "0x38fdC1B79148aBE3c621467e3Cc6556453B0f6C0",
+      "startBlock": 25524390
+    },
+    "AscntDivHookLegacy": {
       "address": "0x29d6e0Ff868ba37fd81F84208B1BC6781dFfB0C0",
       "startBlock": 24568925
     }

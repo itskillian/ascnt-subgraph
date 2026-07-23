@@ -17,11 +17,11 @@ export function handleAscntConfiguredHelper(event: AscntConfiguredEvent): void {
   }
 
   pool.configured = event.params.configured
-  pool.minFee = BigInt.fromI32(event.params.minFee)
+  // SimHookMVP's min fee is a range; surface the lower bound as the pool's minFee.
+  pool.minFee = BigInt.fromI32(event.params.minMinFee)
   pool.maxFee = BigInt.fromI32(event.params.maxFee)
   pool.fallbackFee = BigInt.fromI32(event.params.fallbackFee)
   pool.timeDecayLength = event.params.timeDecayLength
-  pool.illiqScale = event.params.illiqScale
 
   pool.save()
 }
